@@ -7,8 +7,8 @@ const CONFIG = window.KRANIKBOT_CONFIG || {
 };
 
 // Globalne zmienne
-let serverUrl = 'http://localhost:5000';
-let apiKey = '';
+let serverUrl = CONFIG.API_BASE_URL || 'http://localhost:5000';
+let apiKey = CONFIG.API_KEY || '';
 let autoRefreshInterval = null;
 let isConnected = false;
 
