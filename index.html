@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
     <script src="config.js"></script>
+    <script>
+        // Sprawdzenie autoryzacji - przekierowanie do logowania jeśli nie zalogowany
+        const auth = localStorage.getItem('kranikbot_auth') || sessionStorage.getItem('kranikbot_auth');
+        if (!auth || auth !== 'kranikbot-admin-logged-in') {
+            window.location.href = 'login.html';
+        }
+    </script>
 </head>
 <body>
     <div class="container">
@@ -15,6 +22,9 @@
             <div class="header-content">
                 <h1 class="title">🤖 KRANIK BOT</h1>
                 <p class="subtitle">Web Panel Kontrolny</p>
+                <button class="logout-btn" onclick="logout()" title="Wyloguj się">
+                    🚪 Wyloguj
+                </button>
                 <div class="connection-status" id="connectionStatus">
                     <span class="status-indicator" id="statusIndicator"></span>
                     <span id="statusText">Łączenie...</span>

@@ -522,6 +522,18 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+// Funkcja wylogowania
+function logout() {
+    if (confirm('Czy na pewno chcesz się wylogować?')) {
+        // Usuń dane autoryzacji
+        localStorage.removeItem('kranikbot_auth');
+        sessionStorage.removeItem('kranikbot_auth');
+        
+        // Przekieruj do strony logowania
+        window.location.href = 'login.html';
+    }
+}
+
 // Inicjalizacja logów
 addLog('info', '🚀 Web Panel KranikBot uruchomiony');
 addLog('info', '🔗 Sprawdzanie połączenia z serwerem...');
