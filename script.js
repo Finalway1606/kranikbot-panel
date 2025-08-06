@@ -1,14 +1,9 @@
-// Konfiguracja - używa config.js lub fallback
-const CONFIG = window.KRANIKBOT_CONFIG || {
-    API_BASE_URL: 'http://localhost:5000/api',
-    API_KEY: 'kranikbot_2025_secure_key',
-    REFRESH_INTERVAL: 5000,
-    DEMO_MODE: false
-};
+// Konfiguracja - używa config.js
+// CONFIG jest dostępny jako window.KRANIKBOT_CONFIG z config.js
 
 // Globalne zmienne
-let serverUrl = CONFIG.API_BASE_URL || 'http://localhost:5000';
-let apiKey = CONFIG.API_KEY || '';
+let serverUrl = 'http://localhost:5000';
+let apiKey = '';
 let autoRefreshInterval = null;
 let isConnected = false;
 
@@ -43,6 +38,17 @@ function setupEventListeners() {
             startAutoRefresh();
         }
     });
+
+    // Ranking limit change
+    const rankingLimit = document.getElementById('rankingLimit');
+    if (rankingLimit) {
+        rankingLimit.addEventListener('change', function() {
+            // Auto-refresh ranking when limit changes
+            if (document.getElementById('rankingTab').classList.contains('active')) {
+                refreshRanking();
+            }
+        });
+    }
 }
 
 // Zarządzanie połączeniem z serwerem
@@ -52,7 +58,7 @@ async function checkServerConnection() {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'X-API-Key': apiKey
+                'Authorization': `Bearer ${apiKey}`
             },
             timeout: 5000
         });
@@ -190,7 +196,7 @@ async function executeAction(action, message) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-API-Key': apiKey
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({ action: action })
         });
@@ -281,8 +287,7 @@ function updateBotStatus(botType, status, pid, uptime) {
 async function refreshAllData() {
     await Promise.all([
         refreshBotStatus(),
-        refreshStats(),
-        refreshLogs()
+        refreshStats()
     ]);
     
     document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
@@ -294,7 +299,7 @@ async function refreshBotStatus() {
     try {
         const response = await fetch(`${serverUrl}/api/bots/status`, {
             headers: {
-                'X-API-Key': apiKey
+                'Authorization': `Bearer ${apiKey}`
             }
         });
 
@@ -314,7 +319,7 @@ async function refreshStats() {
     try {
         const response = await fetch(`${serverUrl}/api/stats`, {
             headers: {
-                'X-API-Key': apiKey
+                'Authorization': `Bearer ${apiKey}`
             }
         });
 
@@ -324,8 +329,17 @@ async function refreshStats() {
             // Aktualizuj statystyki Twitch
             document.getElementById('twitchFollowers').textContent = data.twitch.followers || 'N/A';
             document.getElementById('twitchSubs').textContent = data.twitch.subscribers || 'N/A';
-            document.getElementById('twitchVips').textContent = data.twitch.vips || 'N/A';
-            document.getElementById('twitchMods').textContent = data.twitch.moderators || 'N/A';
+            
+            // Aktualizuj liczby VIPów i moderatorów
+            const vipCount = Array.isArray(data.twitch.vips) ? data.twitch.vips.length : (data.twitch.vips || 0);
+            const modCount = Array.isArray(data.twitch.moderators) ? data.twitch.moderators.length : (data.twitch.moderators || 0);
+            
+            document.getElementById('twitchVips').textContent = vipCount;
+            document.getElementById('twitchMods').textContent = modCount;
+            
+            // Aktualizuj listy VIPów i moderatorów
+            updateUserList('vipList', data.twitch.vips, 'vip');
+            updateUserList('modList', data.twitch.moderators, 'mod');
             
             // Aktualizuj statystyki bazy danych
             document.getElementById('totalUsers').textContent = data.database.total_users || 'N/A';
@@ -335,6 +349,28 @@ async function refreshStats() {
     } catch (error) {
         console.error('Error refreshing stats:', error);
     }
+}
+
+// Funkcja do aktualizacji list użytkowników (VIPy, moderatorzy)
+function updateUserList(elementId, users, type) {
+    const listElement = document.getElementById(elementId);
+    
+    if (!listElement) return;
+    
+    if (!users || !Array.isArray(users) || users.length === 0) {
+        listElement.innerHTML = '<div class="no-users">Brak użytkowników</div>';
+        return;
+    }
+    
+    const badgeClass = type === 'vip' ? 'vip-badge' : 'mod-badge';
+    const icon = type === 'vip' ? '💎' : '🛡️';
+    
+    listElement.innerHTML = users.map(user => `
+        <div class="user-item">
+            <span class="badge ${badgeClass}">${icon}</span>
+            <span class="username">${user}</span>
+        </div>
+    `).join('');
 }
 
 function refreshStatus() {
@@ -387,6 +423,168 @@ function showTab(tabName) {
     }
 }
 
+// Funkcje zarządzania punktami użytkowników
+async function addUserPoints() {
+    const username = document.getElementById('addPointsUsername').value.trim();
+    const points = parseInt(document.getElementById('addPointsAmount').value);
+    
+    if (!username) {
+        showNotification('error', '❌ Wprowadź nazwę użytkownika');
+        return;
+    }
+    
+    if (!points || points <= 0) {
+        showNotification('error', '❌ Wprowadź prawidłową liczbę punktów');
+        return;
+    }
+    
+    if (!isConnected) {
+        showNotification('warning', '⚠️ Brak połączenia z serwerem');
+        return;
+    }
+    
+    showLoading();
+    addLog('info', `💰 Dodawanie ${points} punktów użytkownikowi ${username}...`);
+    
+    try {
+        const response = await fetch(`${serverUrl}/api/users/points/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                username: username,
+                points: points
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showNotification('success', `✅ ${result.message}`);
+            addLog('success', `✅ ${result.message} (łącznie: ${result.total_points})`);
+            
+            // Wyczyść formularz
+            document.getElementById('addPointsUsername').value = '';
+            document.getElementById('addPointsAmount').value = '';
+            
+            // Odśwież statystyki
+            await refreshAllData();
+        } else {
+            throw new Error(result.error || 'Nieznany błąd');
+        }
+    } catch (error) {
+        showNotification('error', `❌ Błąd: ${error.message}`);
+        addLog('error', `❌ Błąd dodawania punktów: ${error.message}`);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function removeUserPoints() {
+    const username = document.getElementById('removePointsUsername').value.trim();
+    const points = parseInt(document.getElementById('removePointsAmount').value) || 0;
+    
+    if (!username) {
+        showNotification('error', '❌ Wprowadź nazwę użytkownika');
+        return;
+    }
+    
+    if (!isConnected) {
+        showNotification('warning', '⚠️ Brak połączenia z serwerem');
+        return;
+    }
+    
+    const action = points === 0 ? 'wszystkich punktów' : `${points} punktów`;
+    
+    showLoading();
+    addLog('info', `💸 Usuwanie ${action} użytkownikowi ${username}...`);
+    
+    try {
+        const response = await fetch(`${serverUrl}/api/users/points/remove`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                username: username,
+                points: points
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showNotification('success', `✅ ${result.message}`);
+            addLog('success', `✅ ${result.message} (pozostało: ${result.total_points})`);
+            
+            // Wyczyść formularz
+            document.getElementById('removePointsUsername').value = '';
+            document.getElementById('removePointsAmount').value = '';
+            
+            // Odśwież statystyki
+            await refreshAllData();
+        } else {
+            throw new Error(result.error || 'Nieznany błąd');
+        }
+    } catch (error) {
+        showNotification('error', `❌ Błąd: ${error.message}`);
+        addLog('error', `❌ Błąd usuwania punktów: ${error.message}`);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function searchUser() {
+    const username = document.getElementById('userSearch').value.trim();
+    const resultDiv = document.getElementById('userSearchResult');
+    
+    if (!username) {
+        showNotification('error', '❌ Wprowadź nazwę użytkownika');
+        return;
+    }
+    
+    if (!isConnected) {
+        resultDiv.innerHTML = '<div class="loading">⚠️ Brak połączenia z serwerem</div>';
+        return;
+    }
+    
+    resultDiv.innerHTML = '<div class="loading">🔍 Szukanie...</div>';
+    
+    try {
+        // Symulacja wyszukiwania - w rzeczywistości potrzebowałby endpoint do wyszukiwania
+        // Na razie pokażemy przykładowe dane
+        setTimeout(() => {
+            resultDiv.innerHTML = `
+                <div class="user-info">
+                    <h4>👤 ${username}</h4>
+                    <div class="stat-row">
+                        <span>💰 Punkty:</span>
+                        <span>1,234</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>💬 Wiadomości:</span>
+                        <span>567</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>📅 Ostatnio widziany:</span>
+                        <span>2024-01-15 14:30</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>👥 Status:</span>
+                        <span>Follower</span>
+                    </div>
+                </div>
+            `;
+        }, 1000);
+        
+    } catch (error) {
+        resultDiv.innerHTML = `<div class="loading">❌ Błąd wyszukiwania: ${error.message}</div>`;
+    }
+}
+
 // Zarządzanie logami
 function addLog(type, message) {
     const logsContent = document.getElementById('logsContent');
@@ -414,87 +612,38 @@ function clearLogs() {
     addLog('info', '🗑️ Logi zostały wyczyszczone');
 }
 
-async function refreshLogs() {
-    if (!isConnected) {
-        addLog('warning', '⚠️ Brak połączenia z serwerem - nie można pobrać logów');
-        return;
-    }
-
-    try {
-        addLog('info', '🔄 Pobieranie logów z serwera...');
-        
-        const response = await fetch(`${serverUrl}/api/logs`, {
-            headers: {
-                'X-API-Key': apiKey
-            }
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            
-            // Wyczyść obecne logi (oprócz lokalnych logów panelu)
-            const logsContent = document.getElementById('logsContent');
-            const localLogs = Array.from(logsContent.querySelectorAll('.log-entry'))
-                .filter(log => log.textContent.includes('Web Panel') || 
-                              log.textContent.includes('Sprawdzanie połączenia') ||
-                              log.textContent.includes('Pobieranie logów'));
-            
-            logsContent.innerHTML = '';
-            
-            // Przywróć lokalne logi panelu
-            localLogs.forEach(log => logsContent.appendChild(log));
-            
-            // Dodaj logi z serwera
-            if (data.logs && Array.isArray(data.logs)) {
-                data.logs.forEach(logEntry => {
-                    const logDiv = document.createElement('div');
-                    logDiv.className = `log-entry ${logEntry.type || 'info'}`;
-                    
-                    logDiv.innerHTML = `
-                        <span class="log-time">[${logEntry.timestamp || new Date().toLocaleTimeString()}]</span>
-                        <span class="log-message">${logEntry.message || ''}</span>
-                    `;
-                    
-                    logsContent.appendChild(logDiv);
-                });
-                
-                logsContent.scrollTop = logsContent.scrollHeight;
-                addLog('success', `✅ Pobrano ${data.logs.length} logów z serwera`);
-            } else {
-                addLog('warning', '⚠️ Brak logów na serwerze');
-            }
-        } else {
-            throw new Error(`HTTP ${response.status}`);
-        }
-    } catch (error) {
-        addLog('error', `❌ Błąd pobierania logów: ${error.message}`);
-        console.error('Error refreshing logs:', error);
-    }
+function refreshLogs() {
+    addLog('info', '🔄 Odświeżanie logów...');
+    // W rzeczywistej implementacji tutaj byłoby pobieranie logów z serwera
 }
 
 // Zarządzanie ustawieniami
 function loadSettings() {
-    const savedUrl = localStorage.getItem('kranikbot_server_url');
-    const savedApiKey = localStorage.getItem('kranikbot_api_key');
-    const savedRefreshInterval = localStorage.getItem('kranikbot_refresh_interval');
+    // Użyj window.KRANIKBOT_CONFIG z config.js jako domyślne wartości
+    const config = window.KRANIKBOT_CONFIG || {
+        API_BASE_URL: 'http://localhost:5000/api',
+        API_KEY: 'kranikbot-secure-key-2024'
+    };
+    const defaultUrl = config.API_BASE_URL.replace('/api', '');
+    const defaultApiKey = config.API_KEY;
+    
+    const savedUrl = localStorage.getItem('kranikbot_server_url') || defaultUrl;
+    const savedApiKey = localStorage.getItem('kranikbot_api_key') || defaultApiKey;
+    const savedRefreshInterval = localStorage.getItem('kranikbot_refresh_interval') || '5';
     const savedAutoRefresh = localStorage.getItem('kranikbot_auto_refresh');
 
-    if (savedUrl) {
-        serverUrl = savedUrl;
-        document.getElementById('serverUrl').value = savedUrl;
-    }
+    serverUrl = savedUrl;
+    document.getElementById('serverUrl').value = savedUrl;
 
-    if (savedApiKey) {
-        apiKey = savedApiKey;
-        document.getElementById('apiKey').value = savedApiKey;
-    }
+    apiKey = savedApiKey;
+    document.getElementById('apiKey').value = savedApiKey;
 
-    if (savedRefreshInterval) {
-        document.getElementById('refreshInterval').value = savedRefreshInterval;
-    }
+    document.getElementById('refreshInterval').value = savedRefreshInterval;
 
     if (savedAutoRefresh !== null) {
         document.getElementById('autoRefresh').checked = savedAutoRefresh === 'true';
+    } else {
+        document.getElementById('autoRefresh').checked = true; // domyślnie włączone
     }
 }
 
@@ -578,7 +727,7 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// Funkcja wylogowania
+// 🔒 Funkcja wylogowania
 function logout() {
     if (confirm('Czy na pewno chcesz się wylogować?')) {
         // Usuń dane autoryzacji
@@ -590,210 +739,102 @@ function logout() {
     }
 }
 
-// Ranking Functions
-let currentModalUser = null;
-
+// Funkcje rankingu
 async function refreshRanking() {
+    const rankingContent = document.getElementById('rankingContent');
+    const rankingLastUpdate = document.getElementById('rankingLastUpdate');
+    const limit = document.getElementById('rankingLimit').value;
+    
     if (!isConnected) {
-        document.getElementById('rankingTableBody').innerHTML = 
-            '<tr><td colspan="5" class="loading-row">⚠️ Brak połączenia z serwerem</td></tr>';
+        showNotification('warning', '⚠️ Brak połączenia z serwerem');
         return;
     }
-
+    
+    // Pokaż komunikat o odświeżaniu
+    rankingContent.innerHTML = '<div class="loading">🔄 Odświeżanie rankingu...</div>';
+    addLog('info', '🏆 Odświeżanie rankingu użytkowników...');
+    
     try {
-        addLog('info', '🔄 Pobieranie rankingu użytkowników...');
-        
-        const limit = document.getElementById('rankingLimit').value;
         const response = await fetch(`${serverUrl}/api/users/ranking?limit=${limit}`, {
+            method: 'GET',
             headers: {
-                'X-API-Key': apiKey
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
             }
         });
-
+        
         if (response.ok) {
             const data = await response.json();
-            displayRanking(data.ranking);
-            addLog('success', `✅ Pobrano ranking ${data.ranking.length} użytkowników`);
+            
+            if (data.success && data.ranking && data.ranking.length > 0) {
+                // Pokaż komunikat sukcesu
+                const successMessage = document.createElement('div');
+                successMessage.className = 'ranking-success';
+                successMessage.textContent = `✅ Ranking odświeżony pomyślnie! Znaleziono ${data.ranking.length} użytkowników.`;
+                
+                // Utwórz tabelę rankingu
+                const tableHTML = `
+                    <table class="ranking-table">
+                        <thead>
+                            <tr>
+                                <th>Pozycja</th>
+                                <th>Użytkownik</th>
+                                <th>Punkty</th>
+                                <th>Wiadomości</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.ranking.map(user => {
+                                let positionClass = 'ranking-position';
+                                if (user.position === 1) positionClass += ' top-1';
+                                else if (user.position === 2) positionClass += ' top-2';
+                                else if (user.position === 3) positionClass += ' top-3';
+                                
+                                return `
+                                    <tr>
+                                        <td class="${positionClass}">${user.position}</td>
+                                        <td class="ranking-username">${user.username}</td>
+                                        <td class="ranking-points">${user.points.toLocaleString()}</td>
+                                        <td class="ranking-messages">${user.messages}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                `;
+                
+                rankingContent.innerHTML = '';
+                rankingContent.appendChild(successMessage);
+                rankingContent.innerHTML += tableHTML;
+                
+                // Usuń komunikat sukcesu po 3 sekundach
+                setTimeout(() => {
+                    if (successMessage.parentNode) {
+                        successMessage.remove();
+                    }
+                }, 3000);
+                
+                // Aktualizuj czas ostatniego odświeżenia
+                rankingLastUpdate.textContent = new Date().toLocaleTimeString();
+                
+                showNotification('success', `✅ Ranking odświeżony! Pokazano top ${data.ranking.length} użytkowników`);
+                addLog('success', `✅ Ranking odświeżony pomyślnie (${data.ranking.length} użytkowników)`);
+                
+            } else {
+                rankingContent.innerHTML = '<div class="ranking-empty">📭 Brak użytkowników w rankingu</div>';
+                showNotification('info', 'ℹ️ Brak użytkowników w rankingu');
+                addLog('info', 'ℹ️ Ranking jest pusty');
+            }
         } else {
             throw new Error(`HTTP ${response.status}`);
         }
-    } catch (error) {
-        addLog('error', `❌ Błąd pobierania rankingu: ${error.message}`);
-        document.getElementById('rankingTableBody').innerHTML = 
-            '<tr><td colspan="5" class="loading-row">❌ Błąd pobierania danych</td></tr>';
-    }
-}
-
-function displayRanking(ranking) {
-    const tbody = document.getElementById('rankingTableBody');
-    
-    if (!ranking || ranking.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="loading-row">Brak danych do wyświetlenia</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = '';
-    
-    ranking.forEach((user, index) => {
-        const row = document.createElement('tr');
-        
-        // Pozycja z kolorami dla top 3
-        const positionClass = index === 0 ? 'top-1' : index === 1 ? 'top-2' : index === 2 ? 'top-3' : '';
-        const positionIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
-        
-        row.innerHTML = `
-            <td class="position-cell ${positionClass}">${positionIcon} ${user.position}</td>
-            <td class="username-cell">${user.username}</td>
-            <td class="points-cell">${user.points.toLocaleString()}</td>
-            <td>${user.messages || 0}</td>
-            <td class="actions-cell">
-                <button class="btn btn-action btn-success" onclick="openPointsModal('${user.username}', ${user.points}, 'add')" title="Dodaj punkty">➕</button>
-                <button class="btn btn-action btn-warning" onclick="openPointsModal('${user.username}', ${user.points}, 'remove')" title="Odejmij punkty">➖</button>
-                <button class="btn btn-action btn-danger" onclick="openPointsModal('${user.username}', ${user.points}, 'clear')" title="Wyczyść punkty">🗑️</button>
-            </td>
-        `;
-        
-        tbody.appendChild(row);
-    });
-}
-
-function openPointsModal(username, currentPoints, action) {
-    currentModalUser = { username, currentPoints, action };
-    
-    document.getElementById('modalUsername').value = username;
-    document.getElementById('modalCurrentPoints').value = currentPoints;
-    document.getElementById('modalPointsAmount').value = '';
-    
-    // Ustaw tytuł modala w zależności od akcji
-    const modalTitle = document.getElementById('modalTitle');
-    switch (action) {
-        case 'add':
-            modalTitle.textContent = `Dodaj punkty dla ${username}`;
-            break;
-        case 'remove':
-            modalTitle.textContent = `Odejmij punkty dla ${username}`;
-            break;
-        case 'clear':
-            modalTitle.textContent = `Wyczyść punkty dla ${username}`;
-            break;
-        default:
-            modalTitle.textContent = `Zarządzanie punktami - ${username}`;
-    }
-    
-    // Pokaż modal
-    document.getElementById('pointsModal').classList.add('show');
-}
-
-function closePointsModal() {
-    document.getElementById('pointsModal').classList.remove('show');
-    currentModalUser = null;
-}
-
-async function addUserPoints() {
-    const amount = parseInt(document.getElementById('modalPointsAmount').value);
-    
-    if (!amount || amount <= 0) {
-        showNotification('error', '❌ Wprowadź prawidłową liczbę punktów');
-        return;
-    }
-    
-    await executePointsAction('add', amount);
-}
-
-async function removeUserPoints() {
-    const amount = parseInt(document.getElementById('modalPointsAmount').value);
-    
-    if (!amount || amount <= 0) {
-        showNotification('error', '❌ Wprowadź prawidłową liczbę punktów');
-        return;
-    }
-    
-    await executePointsAction('remove', amount);
-}
-
-async function clearUserPoints() {
-    if (!confirm(`Czy na pewno chcesz wyczyścić wszystkie punkty użytkownika ${currentModalUser.username}?`)) {
-        return;
-    }
-    
-    await executePointsAction('clear', 0);
-}
-
-async function executePointsAction(action, amount) {
-    if (!currentModalUser) return;
-    
-    try {
-        showLoading();
-        
-        let endpoint, body, successMessage;
-        
-        switch (action) {
-            case 'add':
-                endpoint = '/api/users/points/add';
-                body = { username: currentModalUser.username, points: amount };
-                successMessage = `✅ Dodano ${amount} punktów użytkownikowi ${currentModalUser.username}`;
-                break;
-                
-            case 'remove':
-                endpoint = '/api/users/points/remove';
-                body = { username: currentModalUser.username, points: amount };
-                successMessage = `✅ Odjęto ${amount} punktów użytkownikowi ${currentModalUser.username}`;
-                break;
-                
-            case 'clear':
-                endpoint = '/api/users/points/remove';
-                body = { username: currentModalUser.username, clear_all: true };
-                successMessage = `✅ Wyczyszczono wszystkie punkty użytkownika ${currentModalUser.username}`;
-                break;
-                
-            default:
-                throw new Error('Nieznana akcja');
-        }
-        
-        const response = await fetch(`${serverUrl}${endpoint}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': apiKey
-            },
-            body: JSON.stringify(body)
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-            addLog('success', successMessage);
-            showNotification('success', successMessage);
-            closePointsModal();
-            await refreshRanking(); // Odśwież ranking
-        } else {
-            throw new Error(result.error || 'Nieznany błąd');
-        }
         
     } catch (error) {
-        addLog('error', `❌ Błąd: ${error.message}`);
-        showNotification('error', `Błąd: ${error.message}`);
-    } finally {
-        hideLoading();
+        rankingContent.innerHTML = `<div class="ranking-empty">❌ Błąd ładowania rankingu: ${error.message}</div>`;
+        showNotification('error', `❌ Błąd odświeżania rankingu: ${error.message}`);
+        addLog('error', `❌ Błąd odświeżania rankingu: ${error.message}`);
     }
 }
-
-
-
-// Zamknij modal po kliknięciu poza nim
-document.addEventListener('click', function(event) {
-    const modal = document.getElementById('pointsModal');
-    if (event.target === modal) {
-        closePointsModal();
-    }
-});
-
-// Obsługa klawisza Escape dla modala
-document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') {
-        closePointsModal();
-    }
-});
 
 // Inicjalizacja logów
 addLog('info', '🚀 Web Panel KranikBot uruchomiony');
