@@ -1,6 +1,6 @@
 // KranikBot Web Panel Configuration for GitHub Pages
 window.KRANIKBOT_CONFIG = {
-    // GitHub Pages configuration (connected to Render API)
+    // GitHub Pages configuration (PRODUCTION)
     API_BASE_URL: 'https://kranikbot-api.onrender.com',
     API_KEY: 'kranikbot-secure-key-2024',
     DEMO_MODE: false,
