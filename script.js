@@ -281,7 +281,8 @@ function updateBotStatus(botType, status, pid, uptime) {
 async function refreshAllData() {
     await Promise.all([
         refreshBotStatus(),
-        refreshStats()
+        refreshStats(),
+        refreshLogs()
     ]);
     
     document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
@@ -411,9 +412,62 @@ function clearLogs() {
     addLog('info', '🗑️ Logi zostały wyczyszczone');
 }
 
-function refreshLogs() {
-    addLog('info', '🔄 Odświeżanie logów...');
-    // W rzeczywistej implementacji tutaj byłoby pobieranie logów z serwera
+async function refreshLogs() {
+    if (!isConnected) {
+        addLog('warning', '⚠️ Brak połączenia z serwerem - nie można pobrać logów');
+        return;
+    }
+
+    try {
+        addLog('info', '🔄 Pobieranie logów z serwera...');
+        
+        const response = await fetch(`${serverUrl}/api/logs`, {
+            headers: {
+                'Authorization': `Bearer ${apiKey}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Wyczyść obecne logi (oprócz lokalnych logów panelu)
+            const logsContent = document.getElementById('logsContent');
+            const localLogs = Array.from(logsContent.querySelectorAll('.log-entry'))
+                .filter(log => log.textContent.includes('Web Panel') || 
+                              log.textContent.includes('Sprawdzanie połączenia') ||
+                              log.textContent.includes('Pobieranie logów'));
+            
+            logsContent.innerHTML = '';
+            
+            // Przywróć lokalne logi panelu
+            localLogs.forEach(log => logsContent.appendChild(log));
+            
+            // Dodaj logi z serwera
+            if (data.logs && Array.isArray(data.logs)) {
+                data.logs.forEach(logEntry => {
+                    const logDiv = document.createElement('div');
+                    logDiv.className = `log-entry ${logEntry.type || 'info'}`;
+                    
+                    logDiv.innerHTML = `
+                        <span class="log-time">[${logEntry.timestamp || new Date().toLocaleTimeString()}]</span>
+                        <span class="log-message">${logEntry.message || ''}</span>
+                    `;
+                    
+                    logsContent.appendChild(logDiv);
+                });
+                
+                logsContent.scrollTop = logsContent.scrollHeight;
+                addLog('success', `✅ Pobrano ${data.logs.length} logów z serwera`);
+            } else {
+                addLog('warning', '⚠️ Brak logów na serwerze');
+            }
+        } else {
+            throw new Error(`HTTP ${response.status}`);
+        }
+    } catch (error) {
+        addLog('error', `❌ Błąd pobierania logów: ${error.message}`);
+        console.error('Error refreshing logs:', error);
+    }
 }
 
 // Zarządzanie ustawieniami
