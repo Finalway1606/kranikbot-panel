@@ -382,6 +382,8 @@ function showTab(tabName) {
     // Specjalne akcje dla konkretnych zakładek
     if (tabName === 'logs') {
         refreshLogs();
+    } else if (tabName === 'ranking') {
+        refreshRanking();
     }
 }
 
@@ -587,6 +589,211 @@ function logout() {
         window.location.href = 'login.html';
     }
 }
+
+// Ranking Functions
+let currentModalUser = null;
+
+async function refreshRanking() {
+    if (!isConnected) {
+        document.getElementById('rankingTableBody').innerHTML = 
+            '<tr><td colspan="5" class="loading-row">⚠️ Brak połączenia z serwerem</td></tr>';
+        return;
+    }
+
+    try {
+        addLog('info', '🔄 Pobieranie rankingu użytkowników...');
+        
+        const limit = document.getElementById('rankingLimit').value;
+        const response = await fetch(`${serverUrl}/api/users/ranking?limit=${limit}`, {
+            headers: {
+                'Authorization': `Bearer ${apiKey}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            displayRanking(data.ranking);
+            addLog('success', `✅ Pobrano ranking ${data.ranking.length} użytkowników`);
+        } else {
+            throw new Error(`HTTP ${response.status}`);
+        }
+    } catch (error) {
+        addLog('error', `❌ Błąd pobierania rankingu: ${error.message}`);
+        document.getElementById('rankingTableBody').innerHTML = 
+            '<tr><td colspan="5" class="loading-row">❌ Błąd pobierania danych</td></tr>';
+    }
+}
+
+function displayRanking(ranking) {
+    const tbody = document.getElementById('rankingTableBody');
+    
+    if (!ranking || ranking.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="loading-row">Brak danych do wyświetlenia</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+    
+    ranking.forEach((user, index) => {
+        const row = document.createElement('tr');
+        
+        // Pozycja z kolorami dla top 3
+        const positionClass = index === 0 ? 'top-1' : index === 1 ? 'top-2' : index === 2 ? 'top-3' : '';
+        const positionIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+        
+        row.innerHTML = `
+            <td class="position-cell ${positionClass}">${positionIcon} ${user.position}</td>
+            <td class="username-cell">${user.username}</td>
+            <td class="points-cell">${user.points.toLocaleString()}</td>
+            <td>${user.messages || 0}</td>
+            <td class="actions-cell">
+                <button class="btn btn-action btn-success" onclick="openPointsModal('${user.username}', ${user.points}, 'add')" title="Dodaj punkty">➕</button>
+                <button class="btn btn-action btn-warning" onclick="openPointsModal('${user.username}', ${user.points}, 'remove')" title="Odejmij punkty">➖</button>
+                <button class="btn btn-action btn-danger" onclick="openPointsModal('${user.username}', ${user.points}, 'clear')" title="Wyczyść punkty">🗑️</button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+function openPointsModal(username, currentPoints, action) {
+    currentModalUser = { username, currentPoints, action };
+    
+    document.getElementById('modalUsername').value = username;
+    document.getElementById('modalCurrentPoints').value = currentPoints;
+    document.getElementById('modalPointsAmount').value = '';
+    
+    // Ustaw tytuł modala w zależności od akcji
+    const modalTitle = document.getElementById('modalTitle');
+    switch (action) {
+        case 'add':
+            modalTitle.textContent = `Dodaj punkty dla ${username}`;
+            break;
+        case 'remove':
+            modalTitle.textContent = `Odejmij punkty dla ${username}`;
+            break;
+        case 'clear':
+            modalTitle.textContent = `Wyczyść punkty dla ${username}`;
+            break;
+        default:
+            modalTitle.textContent = `Zarządzanie punktami - ${username}`;
+    }
+    
+    // Pokaż modal
+    document.getElementById('pointsModal').classList.add('show');
+}
+
+function closePointsModal() {
+    document.getElementById('pointsModal').classList.remove('show');
+    currentModalUser = null;
+}
+
+async function addUserPoints() {
+    const amount = parseInt(document.getElementById('modalPointsAmount').value);
+    
+    if (!amount || amount <= 0) {
+        showNotification('error', '❌ Wprowadź prawidłową liczbę punktów');
+        return;
+    }
+    
+    await executePointsAction('add', amount);
+}
+
+async function removeUserPoints() {
+    const amount = parseInt(document.getElementById('modalPointsAmount').value);
+    
+    if (!amount || amount <= 0) {
+        showNotification('error', '❌ Wprowadź prawidłową liczbę punktów');
+        return;
+    }
+    
+    await executePointsAction('remove', amount);
+}
+
+async function clearUserPoints() {
+    if (!confirm(`Czy na pewno chcesz wyczyścić wszystkie punkty użytkownika ${currentModalUser.username}?`)) {
+        return;
+    }
+    
+    await executePointsAction('clear', 0);
+}
+
+async function executePointsAction(action, amount) {
+    if (!currentModalUser) return;
+    
+    try {
+        showLoading();
+        
+        let endpoint, body, successMessage;
+        
+        switch (action) {
+            case 'add':
+                endpoint = '/api/users/points/add';
+                body = { username: currentModalUser.username, points: amount };
+                successMessage = `✅ Dodano ${amount} punktów użytkownikowi ${currentModalUser.username}`;
+                break;
+                
+            case 'remove':
+                endpoint = '/api/users/points/remove';
+                body = { username: currentModalUser.username, points: amount };
+                successMessage = `✅ Odjęto ${amount} punktów użytkownikowi ${currentModalUser.username}`;
+                break;
+                
+            case 'clear':
+                endpoint = '/api/users/points/remove';
+                body = { username: currentModalUser.username, clear_all: true };
+                successMessage = `✅ Wyczyszczono wszystkie punkty użytkownika ${currentModalUser.username}`;
+                break;
+                
+            default:
+                throw new Error('Nieznana akcja');
+        }
+        
+        const response = await fetch(`${serverUrl}${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(body)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            addLog('success', successMessage);
+            showNotification('success', successMessage);
+            closePointsModal();
+            await refreshRanking(); // Odśwież ranking
+        } else {
+            throw new Error(result.error || 'Nieznany błąd');
+        }
+        
+    } catch (error) {
+        addLog('error', `❌ Błąd: ${error.message}`);
+        showNotification('error', `Błąd: ${error.message}`);
+    } finally {
+        hideLoading();
+    }
+}
+
+
+
+// Zamknij modal po kliknięciu poza nim
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('pointsModal');
+    if (event.target === modal) {
+        closePointsModal();
+    }
+});
+
+// Obsługa klawisza Escape dla modala
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closePointsModal();
+    }
+});
 
 // Inicjalizacja logów
 addLog('info', '🚀 Web Panel KranikBot uruchomiony');
