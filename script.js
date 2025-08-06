@@ -52,7 +52,7 @@ async function checkServerConnection() {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
+                'X-API-Key': apiKey
             },
             timeout: 5000
         });
@@ -190,7 +190,7 @@ async function executeAction(action, message) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
+                'X-API-Key': apiKey
             },
             body: JSON.stringify({ action: action })
         });
@@ -294,7 +294,7 @@ async function refreshBotStatus() {
     try {
         const response = await fetch(`${serverUrl}/api/bots/status`, {
             headers: {
-                'Authorization': `Bearer ${apiKey}`
+                'X-API-Key': apiKey
             }
         });
 
@@ -314,7 +314,7 @@ async function refreshStats() {
     try {
         const response = await fetch(`${serverUrl}/api/stats`, {
             headers: {
-                'Authorization': `Bearer ${apiKey}`
+                'X-API-Key': apiKey
             }
         });
 
@@ -425,7 +425,7 @@ async function refreshLogs() {
         
         const response = await fetch(`${serverUrl}/api/logs`, {
             headers: {
-                'Authorization': `Bearer ${apiKey}`
+                'X-API-Key': apiKey
             }
         });
 
@@ -606,7 +606,7 @@ async function refreshRanking() {
         const limit = document.getElementById('rankingLimit').value;
         const response = await fetch(`${serverUrl}/api/users/ranking?limit=${limit}`, {
             headers: {
-                'Authorization': `Bearer ${apiKey}`
+                'X-API-Key': apiKey
             }
         });
 
@@ -754,7 +754,7 @@ async function executePointsAction(action, amount) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
+                'X-API-Key': apiKey
             },
             body: JSON.stringify(body)
         });
