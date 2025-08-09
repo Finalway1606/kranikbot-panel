@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}🤖 KRANIK BOT - Panel Kontrolny{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
+    <style>
+        :root {
+            --bg-dark: #1e1e1e;
+            --bg-medium: #2d2d2d;
+            --bg-light: #3d3d3d;
+            --accent-blue: #0078d4;
+            --accent-green: #107c10;
+            --accent-red: #d13438;
+            --accent-orange: #ff8c00;
+            --text-white: #ffffff;
+            --text-gray: #cccccc;
+        }
+        
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-white);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background-color: var(--bg-medium) !important;
+            border-bottom: 2px solid var(--accent-blue);
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        .card {
+            background-color: var(--bg-medium);
+            border: 1px solid var(--bg-light);
+            color: var(--text-white);
+        }
+        
+        .card-header {
+            background-color: var(--bg-light);
+            border-bottom: 1px solid var(--accent-blue);
+            font-weight: bold;
+        }
+        
+        .btn-primary {
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+        
+        .btn-success {
+            background-color: var(--accent-green);
+            border-color: var(--accent-green);
+        }
+        
+        .btn-danger {
+            background-color: var(--accent-red);
+            border-color: var(--accent-red);
+        }
+        
+        .btn-warning {
+            background-color: var(--accent-orange);
+            border-color: var(--accent-orange);
+            color: white;
+        }
+        
+        .table-dark {
+            --bs-table-bg: var(--bg-medium);
+        }
+        
+        .form-control, .form-select {
+            background-color: var(--bg-light);
+            border-color: var(--bg-light);
+            color: var(--text-white);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background-color: var(--bg-light);
+            border-color: var(--accent-blue);
+            color: var(--text-white);
+            box-shadow: 0 0 0 0.25rem rgba(0, 120, 212, 0.25);
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, var(--accent-blue), #106ebe);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card.green {
+            background: linear-gradient(135deg, var(--accent-green), #0e6e0e);
+        }
+        
+        .stat-card.orange {
+            background: linear-gradient(135deg, var(--accent-orange), #e67c00);
+        }
+        
+        .stat-card.red {
+            background: linear-gradient(135deg, var(--accent-red), #b92b2f);
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-online {
+            background-color: var(--accent-green);
+            box-shadow: 0 0 10px var(--accent-green);
+        }
+        
+        .status-offline {
+            background-color: var(--accent-red);
+        }
+        
+        .log-container {
+            background-color: var(--bg-dark);
+            border: 1px solid var(--bg-light);
+            border-radius: 5px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .alert {
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .alert-success {
+            background-color: rgba(16, 124, 16, 0.2);
+            color: var(--accent-green);
+            border-left: 4px solid var(--accent-green);
+        }
+        
+        .alert-danger {
+            background-color: rgba(209, 52, 56, 0.2);
+            color: var(--accent-red);
+            border-left: 4px solid var(--accent-red);
+        }
+        
+        .alert-info {
+            background-color: rgba(0, 120, 212, 0.2);
+            color: var(--accent-blue);
+            border-left: 4px solid var(--accent-blue);
+        }
+        
+        .sidebar {
+            background-color: var(--bg-medium);
+            min-height: calc(100vh - 76px);
+            border-right: 2px solid var(--bg-light);
+        }
+        
+        .nav-pills .nav-link {
+            color: var(--text-gray);
+            border-radius: 8px;
+            margin-bottom: 5px;
+        }
+        
+        .nav-pills .nav-link.active {
+            background-color: var(--accent-blue);
+            color: white;
+        }
+        
+        .nav-pills .nav-link:hover {
+            background-color: var(--bg-light);
+            color: white;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                🤖 KRANIK BOT
+            </a>
+            <span class="navbar-text me-3">
+                Panel Kontrolny
+            </span>
+            
+            <div class="navbar-nav ms-auto">
+                {% if session.logged_in %}
+                    <div class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ session.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">
+                                <i class="bi bi-box-arrow-right"></i> Wyloguj
+                            </a></li>
+                        </ul>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="container-fluid mt-3">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    {% block content %}{% endblock %}
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Common JavaScript -->
+    <script>
+        // Socket.IO connection (only if logged in)
+        {% if session.logged_in %}
+        const socket = io();
+        
+        socket.on('connect', function() {
+            console.log('Połączono z serwerem');
+        });
+        
+        socket.on('new_log', function(data) {
+            addLogEntry(data.message);
+        });
+        
+        function addLogEntry(message) {
+            const logContainer = document.getElementById('log-container');
+            if (logContainer) {
+                const logEntry = document.createElement('div');
+                logEntry.textContent = message;
+                logContainer.appendChild(logEntry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+        {% endif %}
+        
+        // Utility functions
+        function showLoading(buttonId) {
+            const btn = document.getElementById(buttonId);
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loading"></span> Ładowanie...';
+            }
+        }
+        
+        function hideLoading(buttonId, originalText) {
+            const btn = document.getElementById(buttonId);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+        
+        function showAlert(message, type = 'info') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.container-fluid');
+            if (container) {
+                container.insertBefore(alertDiv, container.firstChild);
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    alertDiv.remove();
+                }, 5000);
+            }
+        }
+        
+        // Auto-refresh functions
+        function startAutoRefresh() {
+            setInterval(updateStatus, 5000);
+            setInterval(updateStats, 30000);
+        }
+        
+        function updateStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    updateStatusIndicators(data);
+                })
+                .catch(error => console.error('Błąd aktualizacji statusu:', error));
+        }
+        
+        function updateStatusIndicators(status) {
+            const twitchIndicator = document.getElementById('twitch-status');
+            const discordIndicator = document.getElementById('discord-status');
+            
+            if (twitchIndicator) {
+                twitchIndicator.className = `status-indicator ${status.twitch ? 'status-online' : 'status-offline'}`;
+                twitchIndicator.nextElementSibling.textContent = `Twitch: ${status.twitch ? 'Online' : 'Offline'}`;
+            }
+            
+            if (discordIndicator) {
+                discordIndicator.className = `status-indicator ${status.discord ? 'status-online' : 'status-offline'}`;
+                discordIndicator.nextElementSibling.textContent = `Discord: ${status.discord ? 'Online' : 'Offline'}`;
+            }
+        }
+        
+        // Start auto-refresh when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            {% if session.logged_in %}
+            startAutoRefresh();
+            updateStatus();
+            {% endif %}
+        });
+    </script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

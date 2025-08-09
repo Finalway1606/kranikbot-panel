@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}🔐 Logowanie - KRANIK BOT{% endblock %}
+
+{% block content %}
+<div class="container-fluid h-100">
+    <div class="row justify-content-center align-items-center min-vh-100">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-lg">
+                <div class="card-header text-center">
+                    <h3 class="mb-0">🤖 KRANIK BOT</h3>
+                    <p class="mb-0 text-muted">Panel Kontrolny</p>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST" id="loginForm">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">
+                                <i class="bi bi-person"></i> Nazwa użytkownika
+                            </label>
+                            <input type="text" class="form-control" id="username" name="username" 
+                                   placeholder="admin" required autofocus>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="password" class="form-label">
+                                <i class="bi bi-lock"></i> Hasło
+                            </label>
+                            <input type="password" class="form-control" id="password" name="password" 
+                                   placeholder="admin" required>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg" id="loginBtn">
+                                <i class="bi bi-box-arrow-in-right"></i> Zaloguj się
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="text-center">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> 
+                            Domyślne dane: <strong>admin</strong> / <strong>admin</strong>
+                        </small>
+                    </div>
+                </div>
+                <div class="card-footer text-center text-muted">
+                    <small>
+                        <i class="bi bi-shield-check"></i> 
+                        Bezpieczne logowanie do panelu kontrolnego
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .min-vh-100 {
+        min-height: 100vh;
+        background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-medium) 100%);
+    }
+    
+    .card {
+        border: none;
+        border-radius: 15px;
+        backdrop-filter: blur(10px);
+        background-color: rgba(45, 45, 45, 0.95);
+    }
+    
+    .card-header {
+        border-radius: 15px 15px 0 0;
+        background: linear-gradient(135deg, var(--accent-blue), #106ebe);
+        color: white;
+        border: none;
+    }
+    
+    .form-control:focus {
+        box-shadow: 0 0 0 0.25rem rgba(0, 120, 212, 0.25);
+        border-color: var(--accent-blue);
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, var(--accent-blue), #106ebe);
+        border: none;
+        border-radius: 8px;
+        padding: 12px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 120, 212, 0.4);
+    }
+    
+    .card-footer {
+        border-radius: 0 0 15px 15px;
+        background-color: rgba(30, 30, 30, 0.5);
+        border: none;
+    }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+        const btn = document.getElementById('loginBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading"></span> Logowanie...';
+        
+        // Re-enable button after 3 seconds in case of error
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Zaloguj się';
+        }, 3000);
+    });
+    
+    // Auto-fill for demo purposes
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('username').value = 'admin';
+        document.getElementById('password').value = 'admin';
+    });
+</script>
+{% endblock %}
